@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  # 后端应用
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - NODE_VERSION=18
+    container_name: backend-admin
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      - NODE_ENV=production
+      - DATABASE_HOST=mysql
+      - DATABASE_PORT=3306
+      - DATABASE_USERNAME=admin
+      - DATABASE_PASSWORD=admin123
+      - DATABASE_NAME=backend_admin
+      - JWT_SECRET=your-very-strong-production-secret-key-change-this
+      - JWT_EXPIRES_IN=24h
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=redis123
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - app-network
+
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: redis-cache
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    command: redis-server --requirepass redis123
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', 'redis123', 'ping']
+      timeout: 3s
+      retries: 5
+    networks:
+      - app-network
+
+  # MySQL 数据库
+  mysql:
+    image: mysql:8.0
+    container_name: mysql-db
+    restart: unless-stopped
+    ports:
+      - '3306:3306'
+    environment:
+      - MYSQL_ROOT_PASSWORD=root123
+      - MYSQL_DATABASE=backend_admin
+      - MYSQL_USER=admin
+      - MYSQL_PASSWORD=admin123
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost']
+      timeout: 20s
+      retries: 10
+    networks:
+      - app-network
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge
